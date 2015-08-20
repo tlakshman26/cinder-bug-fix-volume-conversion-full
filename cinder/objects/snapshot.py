@@ -147,6 +147,18 @@ class Snapshot(base.CinderPersistentObject, base.CinderObject,
         self._from_db_object(self._context, self, db_snapshot)
 
     @base.remotable
+    def refresh(self):
+        current = self.__class__.get_by_id(self._context, self.id)
+
+        for field in self.fields:
+            # NOTE(thangp): Only update attributes that are already set.  We
+            # do not want to unexpectedly trigger a lazy-load.
+            if self.obj_attr_is_set(field):
+                if self[field] != current[field]:
+                    self[field] = current[field]
+        self.obj_reset_changes()
+
+    @base.remotable
     def save(self):
         updates = self.cinder_obj_get_changes()
         if updates:

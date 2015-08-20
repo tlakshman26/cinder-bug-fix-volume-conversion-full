@@ -20,6 +20,7 @@ from taskflow.types import failure as ft
 from cinder import exception
 from cinder import flow_utils
 from cinder.i18n import _LE
+from cinder import objects
 from cinder.volume.flows import common
 
 LOG = logging.getLogger(__name__)
@@ -68,7 +69,8 @@ class EntryCreateTask(flow_utils.CinderTask):
             'bootable': kwargs.pop('bootable'),
         }
 
-        volume = self.db.volume_create(context, volume_properties)
+        volume = objects.Volume(context=context, **volume_properties)
+        volume.create()
 
         return {
             'volume_properties': volume_properties,
@@ -88,11 +90,12 @@ class EntryCreateTask(flow_utils.CinderTask):
         if isinstance(result, ft.Failure):
             return
 
-        vol_id = result['volume_id']
+        volume = result['volume']
         try:
-            self.db.volume_destroy(context.elevated(), vol_id)
+            volume.destroy()
         except exception.CinderException:
-            LOG.exception(_LE("Failed destroying volume entry: %s."), vol_id)
+            LOG.exception(_LE("Failed destroying volume entry: %s."),
+                          volume.id)
 
 
 class ManageCastTask(flow_utils.CinderTask):

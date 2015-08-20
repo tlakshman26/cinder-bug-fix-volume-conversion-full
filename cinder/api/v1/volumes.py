@@ -49,15 +49,15 @@ def _translate_attachment_detail_view(_context, vol):
 def _translate_attachment_summary_view(_context, vol):
     """Maps keys for attachment summary view."""
     d = []
-    attachments = vol.get('volume_attachment', [])
+    attachments = vol.volume_attachment
     for attachment in attachments:
-        if attachment.get('attach_status') == 'attached':
-            a = {'id': attachment.get('volume_id'),
-                 'attachment_id': attachment.get('id'),
-                 'volume_id': attachment.get('volume_id'),
-                 'server_id': attachment.get('instance_uuid'),
-                 'host_name': attachment.get('attached_host'),
-                 'device': attachment.get('mountpoint'),
+        if attachment.attach_status == 'attached':
+            a = {'id': attachment.volume_id,
+                 'attachment_id': attachment.id,
+                 'volume_id': attachment.volume_id,
+                 'server_id': attachment.instance_uuid,
+                 'host_name': attachment.attached_host,
+                 'device': attachment.mountpoint,
                  }
             d.append(a)
 
@@ -78,52 +78,48 @@ def _translate_volume_summary_view(context, vol, image_id=None):
     """Maps keys for volumes summary view."""
     d = {}
 
-    d['id'] = vol['id']
-    d['status'] = vol['status']
-    d['size'] = vol['size']
-    d['availability_zone'] = vol['availability_zone']
-    d['created_at'] = vol['created_at']
+    d['id'] = vol.id
+    d['status'] = vol.status
+    d['size'] = vol.size
+    d['availability_zone'] = vol.availability_zone
+    d['created_at'] = vol.created_at
 
     # Need to form the string true/false explicitly here to
     # maintain our API contract
-    if vol['bootable']:
+    if vol.bootable:
         d['bootable'] = 'true'
     else:
         d['bootable'] = 'false'
 
-    if vol['multiattach']:
+    if vol.multiattach:
         d['multiattach'] = 'true'
     else:
         d['multiattach'] = 'false'
 
     d['attachments'] = []
-    if vol['attach_status'] == 'attached':
+    if vol.attach_status == 'attached':
         d['attachments'] = _translate_attachment_detail_view(context, vol)
 
-    d['display_name'] = vol['display_name']
-    d['display_description'] = vol['display_description']
+    d['display_name'] = vol.display_name
+    d['display_description'] = vol.display_description
 
-    if vol['volume_type_id'] and vol.get('volume_type'):
-        d['volume_type'] = vol['volume_type']['name']
+    if vol.volume_type_id and vol.volume_type:
+        d['volume_type'] = vol.volume_type.name
     else:
-        d['volume_type'] = vol['volume_type_id']
+        d['volume_type'] = vol.volume_type_id
 
-    d['snapshot_id'] = vol['snapshot_id']
-    d['source_volid'] = vol['source_volid']
+    d['snapshot_id'] = vol.snapshot_id
+    d['source_volid'] = vol.source_volid
 
-    d['encrypted'] = vol['encryption_key_id'] is not None
+    d['encrypted'] = vol.encryption_key_id is not None
 
     if image_id:
         d['image_id'] = image_id
 
     LOG.info(_LI("vol=%s"), vol, context=context)
 
-    if vol.get('volume_metadata'):
-        metadata = vol.get('volume_metadata')
-        d['metadata'] = {item['key']: item['value'] for item in metadata}
-    # avoid circular ref when vol is a Volume instance
-    elif vol.get('metadata') and isinstance(vol.get('metadata'), dict):
-        d['metadata'] = vol['metadata']
+    if vol.metadata:
+        d['metadata'] = vol.metadata
     else:
         d['metadata'] = {}
 
@@ -292,12 +288,10 @@ class VolumeController(wsgi.Controller):
                                           filters=search_opts,
                                           viewable_admin_meta=True)
 
-        volumes = [dict(vol) for vol in volumes]
-
         for volume in volumes:
             utils.add_visible_admin_metadata(volume)
 
-        limited_list = common.limited(volumes, req)
+        limited_list = common.limited(volumes.objects, req)
         req.cache_db_volumes(limited_list)
 
         res = [entity_maker(context, vol) for vol in limited_list]
@@ -397,11 +391,6 @@ class VolumeController(wsgi.Controller):
                                             volume.get('display_name'),
                                             volume.get('display_description'),
                                             **kwargs)
-
-        # TODO(vish): Instance should be None at db layer instead of
-        #             trying to lazy load, but for now we turn it into
-        #             a dict to avoid an error.
-        new_volume = dict(new_volume)
 
         retval = _translate_volume_detail_view(context, new_volume, image_uuid)
 

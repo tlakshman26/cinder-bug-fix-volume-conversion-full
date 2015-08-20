@@ -25,6 +25,7 @@ from cinder import db
 from cinder import objects
 from cinder import test
 from cinder.tests.unit import fake_snapshot
+from cinder.tests.unit import fake_volume
 from cinder.tests.unit import utils as tests_utils
 from cinder.volume import rpcapi as volume_rpcapi
 from cinder.volume import utils
@@ -45,7 +46,6 @@ class VolumeRpcAPITestCase(test.TestCase):
         vol['attach_status'] = "detached"
         vol['metadata'] = {"test_key": "test_val"}
         volume = db.volume_create(self.context, vol)
-
         snpshot = {
             'id': 1,
             'volume_id': 'fake_id',
@@ -83,6 +83,8 @@ class VolumeRpcAPITestCase(test.TestCase):
         group = objects.ConsistencyGroup.get_by_id(self.context, group.id)
         group2 = objects.ConsistencyGroup.get_by_id(self.context, group2.id)
         self.fake_volume = jsonutils.to_primitive(volume)
+        self.fake_volume_obj = fake_volume.fake_volume_obj(self.context,
+                                                           **vol)
         self.fake_volume_metadata = volume["volume_metadata"]
         self.fake_snapshot = jsonutils.to_primitive(snapshot)
         self.fake_snapshot_obj = fake_snapshot.fake_snapshot_obj(self.context,
@@ -118,8 +120,14 @@ class VolumeRpcAPITestCase(test.TestCase):
         expected_msg = copy.deepcopy(kwargs)
         if 'volume' in expected_msg:
             volume = expected_msg['volume']
+
+            # NOTE(thangp): copy.deepcopy() is making oslo_versionedobjects
+            # think that 'metadata' was changed.
+            if isinstance(volume, objects.Volume):
+                volume.obj_reset_changes()
             del expected_msg['volume']
             expected_msg['volume_id'] = volume['id']
+            expected_msg['volume'] = volume
         if 'snapshot' in expected_msg:
             snapshot = expected_msg['snapshot']
             del expected_msg['snapshot']
@@ -190,18 +198,22 @@ class VolumeRpcAPITestCase(test.TestCase):
                 expected_cg = expected_msg[kwarg].obj_to_primitive()
                 cg = value.obj_to_primitive()
                 self.assertEqual(expected_cg, cg)
+            elif isinstance(value, objects.Volume):
+                expected_volume = expected_msg[kwarg].obj_to_primitive()
+                volume = value.obj_to_primitive()
+                self.assertEqual(expected_volume, volume)
             else:
                 self.assertEqual(expected_msg[kwarg], value)
 
     def test_create_volume(self):
         self._test_volume_api('create_volume',
                               rpc_method='cast',
-                              volume=self.fake_volume,
+                              volume=self.fake_volume_obj,
                               host='fake_host1',
                               request_spec='fake_request_spec',
                               filter_properties='fake_properties',
                               allow_reschedule=True,
-                              version='1.24')
+                              version='1.27')
 
     def test_create_volume_serialization(self):
         request_spec = {"metadata": self.fake_volume_metadata}
@@ -212,14 +224,14 @@ class VolumeRpcAPITestCase(test.TestCase):
                               request_spec=request_spec,
                               filter_properties='fake_properties',
                               allow_reschedule=True,
-                              version='1.24')
+                              version='1.27')
 
     def test_delete_volume(self):
         self._test_volume_api('delete_volume',
                               rpc_method='cast',
-                              volume=self.fake_volume,
+                              volume=self.fake_volume_obj,
                               unmanage_only=False,
-                              version='1.15')
+                              version='1.27')
 
     def test_create_snapshot(self):
         self._test_volume_api('create_snapshot',

@@ -64,11 +64,13 @@ objects_ignore_codes = ["E0213", "E1101", "E1102"]
 # non-existent member of an object, but should be ignored because the object
 # member is created dynamically.
 objects_ignore_messages = [
+    "Module 'cinder.objects' has no 'Backup' member",
+    "Module 'cinder.objects' has no 'BackupList' member",
     "No value passed for parameter 'id' in function call",
     "Module 'cinder.objects' has no 'Snapshot' member",
     "Module 'cinder.objects' has no 'SnapshotList' member",
-    "Module 'cinder.objects' has no 'Backup' member",
-    "Module 'cinder.objects' has no 'BackupList' member",
+    "Module 'cinder.objects' has no 'Volume' member",
+    "Module 'cinder.objects' has no 'VolumeList' member",
 ]
 objects_ignore_modules = ["cinder/objects/"]
 

@@ -44,9 +44,14 @@ class CreateVolumeFlowTestCase(test.TestCase):
         # called to avoid div by zero errors.
         self.counter = float(0)
 
+    @mock.patch('cinder.objects.Volume.get_by_id')
     @mock.patch('time.time', side_effect=time_inc)
     @mock.patch('cinder.objects.ConsistencyGroup.get_by_id')
-    def test_cast_create_volume(self, consistencygroup_get_by_id, mock_time):
+    def test_cast_create_volume(self, consistencygroup_get_by_id, mock_time,
+                                volume_get_by_id):
+        volume = fake_volume.fake_volume_obj(self.ctxt)
+        volume_get_by_id.return_value = volume
+
         props = {}
         consistencygroup_obj = \
             fake_consistencygroup.fake_consistencyobject_obj(
@@ -186,25 +191,25 @@ class CreateVolumeFlowManagerTestCase(test.TestCase):
     @mock.patch('cinder.volume.flows.manager.create_volume.'
                 'CreateVolumeFromSpecTask.'
                 '_handle_bootable_volume_glance_meta')
+    @mock.patch('cinder.objects.Volume.get_by_id')
     @mock.patch('cinder.objects.Snapshot.get_by_id')
-    def test_create_from_snapshot(self, snapshot_get_by_id, handle_bootable):
+    def test_create_from_snapshot(self, snapshot_get_by_id, volume_get_by_id,
+                                  handle_bootable):
         fake_db = mock.MagicMock()
         fake_driver = mock.MagicMock()
         fake_manager = create_volume_manager.CreateVolumeFromSpecTask(
             fake_db, fake_driver)
-        volume = fake_volume.fake_db_volume()
-        orig_volume_db = mock.MagicMock(id=10, bootable=True)
+        volume_db = {'bootable': True}
+        volume_obj = fake_volume.fake_volume_obj(self.ctxt, **volume_db)
         snapshot_obj = fake_snapshot.fake_snapshot_obj(self.ctxt)
         snapshot_get_by_id.return_value = snapshot_obj
-        fake_db.volume_get.return_value = orig_volume_db
+        volume_get_by_id.return_value = volume_obj
 
-        fake_manager._create_from_snapshot(self.ctxt, volume,
+        fake_manager._create_from_snapshot(self.ctxt, volume_obj,
                                            snapshot_obj.id)
         fake_driver.create_volume_from_snapshot.assert_called_once_with(
-            volume, snapshot_obj)
-        fake_db.volume_get.assert_called_once_with(self.ctxt,
-                                                   snapshot_obj.volume_id)
-        handle_bootable.assert_called_once_with(self.ctxt, volume['id'],
+            volume_obj, snapshot_obj)
+        handle_bootable.assert_called_once_with(self.ctxt, volume_obj.id,
                                                 snapshot_id=snapshot_obj.id)
 
     @mock.patch('cinder.objects.Snapshot.get_by_id')

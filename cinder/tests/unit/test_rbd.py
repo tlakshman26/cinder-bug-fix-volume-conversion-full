@@ -21,13 +21,12 @@ import os
 import tempfile
 
 import mock
-from oslo_utils import timeutils
 from oslo_utils import units
 
-from cinder import db
 from cinder import exception
 from cinder.i18n import _
 from cinder.image import image_utils
+from cinder import objects
 from cinder import test
 from cinder.tests.unit.image import fake as fake_image
 from cinder.tests.unit import test_volume
@@ -1065,7 +1064,6 @@ class ManagedRBDTestCase(test_volume.DriverTestCase):
         NOTE: if clone_error is True we force the image type to raw otherwise
               clone_image is not called
         """
-        volume_id = 1
 
         # See tests.image.fake for image types.
         if raw:
@@ -1074,32 +1072,32 @@ class ManagedRBDTestCase(test_volume.DriverTestCase):
             image_id = 'c905cedb-7281-47e4-8a62-f26bc5fc4c77'
 
         # creating volume testdata
-        db.volume_create(self.context,
-                         {'id': volume_id,
-                          'updated_at': timeutils.utcnow(),
-                          'display_description': 'Test Desc',
-                          'size': 20,
-                          'status': 'creating',
-                          'instance_uuid': None,
-                          'host': 'dummy'})
+        db_volume = {'display_description': 'Test Desc',
+                     'size': 20,
+                     'status': 'creating',
+                     'availability_zone': 'fake_zone',
+                     'attach_status': 'detached',
+                     'host': 'dummy'}
+        volume = objects.Volume(context=self.context, **db_volume)
+        volume.create()
 
         try:
             if not clone_error:
                 self.volume.create_volume(self.context,
-                                          volume_id,
+                                          volume,
                                           request_spec={'image_id': image_id})
             else:
                 self.assertRaises(exception.CinderException,
                                   self.volume.create_volume,
                                   self.context,
-                                  volume_id,
+                                  volume,
                                   request_spec={'image_id': image_id})
 
-            volume = db.volume_get(self.context, volume_id)
-            self.assertEqual(expected_status, volume['status'])
+            volume.refresh()
+            self.assertEqual(expected_status, volume.status)
         finally:
             # cleanup
-            db.volume_destroy(self.context, volume_id)
+            volume.destroy()
 
     def test_create_vol_from_image_status_available(self):
         """Clone raw image then verify volume is in available state."""

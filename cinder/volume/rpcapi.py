@@ -24,7 +24,6 @@ from cinder.objects import base as objects_base
 from cinder import rpc
 from cinder.volume import utils
 
-
 CONF = cfg.CONF
 
 
@@ -72,6 +71,8 @@ class VolumeAPI(object):
         1.26 - Adds support for sending objects over RPC in
                create_consistencygroup(), create_consistencygroup_from_src(),
                update_consistencygroup() and delete_consistencygroup().
+        1.27 - Adds support for sending objects over RPC in create_volume()
+               and delete_volume()
     """
 
     BASE_RPC_API_VERSION = '1.0'
@@ -81,7 +82,7 @@ class VolumeAPI(object):
         target = messaging.Target(topic=CONF.volume_topic,
                                   version=self.BASE_RPC_API_VERSION)
         serializer = objects_base.CinderObjectSerializer()
-        self.client = rpc.get_client(target, '1.26', serializer=serializer)
+        self.client = rpc.get_client(target, '1.27', serializer=serializer)
 
     def create_consistencygroup(self, ctxt, group, host):
         new_host = utils.extract_host(host)
@@ -130,19 +131,19 @@ class VolumeAPI(object):
     def create_volume(self, ctxt, volume, host, request_spec,
                       filter_properties, allow_reschedule=True):
         new_host = utils.extract_host(host)
-        cctxt = self.client.prepare(server=new_host, version='1.24')
+        cctxt = self.client.prepare(server=new_host, version='1.27')
         request_spec_p = jsonutils.to_primitive(request_spec)
         cctxt.cast(ctxt, 'create_volume',
-                   volume_id=volume['id'],
+                   volume=volume,
                    request_spec=request_spec_p,
                    filter_properties=filter_properties,
                    allow_reschedule=allow_reschedule)
 
     def delete_volume(self, ctxt, volume, unmanage_only=False):
-        new_host = utils.extract_host(volume['host'])
-        cctxt = self.client.prepare(server=new_host, version='1.15')
+        new_host = utils.extract_host(volume.host)
+        cctxt = self.client.prepare(server=new_host, version='1.27')
         cctxt.cast(ctxt, 'delete_volume',
-                   volume_id=volume['id'],
+                   volume=volume,
                    unmanage_only=unmanage_only)
 
     def create_snapshot(self, ctxt, volume, snapshot):

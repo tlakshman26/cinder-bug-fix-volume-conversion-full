@@ -140,5 +140,12 @@ class ObjectListBase(base.ObjectListBase):
     pass
 
 
+class CinderComparableObject(base.ComparableVersionedObject):
+    def __eq__(self, obj):
+        if hasattr(obj, 'obj_to_primitive'):
+            return self.obj_to_primitive() == obj.obj_to_primitive()
+        return False
+
+
 class CinderObjectSerializer(base.VersionedObjectSerializer):
     OBJ_BASE_CLASS = CinderObject

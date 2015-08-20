@@ -18,6 +18,7 @@ from taskflow.patterns import linear_flow
 from cinder import exception
 from cinder import flow_utils
 from cinder.i18n import _, _LE
+from cinder import objects
 from cinder import rpc
 from cinder import utils
 from cinder.volume.flows import common
@@ -53,16 +54,16 @@ class ExtractSchedulerSpecTask(flow_utils.CinderTask):
             raise exception.InvalidInput(
                 reason=_("No volume_id provided to populate a "
                          "request_spec from"))
-        volume_ref = self.db_api.volume_get(context, volume_id)
-        volume_type_id = volume_ref.get('volume_type_id')
-        vol_type = self.db_api.volume_type_get(context, volume_type_id)
+        volume_ref = objects.Volume.get_by_id(context, volume_id)
+        volume_type_id = volume_ref.volume_type_id
+        vol_type = volume_ref.volume_type
         return {
             'volume_id': volume_id,
             'snapshot_id': snapshot_id,
             'image_id': image_id,
             'volume_properties': {
-                'size': utils.as_int(volume_ref.get('size'), quiet=False),
-                'availability_zone': volume_ref.get('availability_zone'),
+                'size': utils.as_int(volume_ref.size, quiet=False),
+                'availability_zone': volume_ref.availability_zone,
                 'volume_type_id': volume_type_id,
             },
             'volume_type': list(dict(vol_type).items()),
@@ -143,7 +144,7 @@ class ScheduleCreateVolumeTask(flow_utils.CinderTask):
 
 def get_flow(context, db_api, driver_api, request_spec=None,
              filter_properties=None,
-             volume_id=None, snapshot_id=None, image_id=None):
+             volume=None, snapshot_id=None, image_id=None):
 
     """Constructs and returns the scheduler entrypoint flow.
 
@@ -158,7 +159,7 @@ def get_flow(context, db_api, driver_api, request_spec=None,
         'context': context,
         'raw_request_spec': request_spec,
         'filter_properties': filter_properties,
-        'volume_id': volume_id,
+        'volume_id': volume.id,
         'snapshot_id': snapshot_id,
         'image_id': image_id,
     }

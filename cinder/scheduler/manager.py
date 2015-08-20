@@ -55,7 +55,7 @@ LOG = logging.getLogger(__name__)
 class SchedulerManager(manager.Manager):
     """Chooses a host to create volumes."""
 
-    RPC_API_VERSION = '1.8'
+    RPC_API_VERSION = '1.9'
 
     target = messaging.Target(version=RPC_API_VERSION)
 
@@ -114,17 +114,16 @@ class SchedulerManager(manager.Manager):
                 group.status = 'error'
                 group.save()
 
-    def create_volume(self, context, topic, volume_id, snapshot_id=None,
+    def create_volume(self, context, topic, volume, snapshot_id=None,
                       image_id=None, request_spec=None,
                       filter_properties=None):
-
         self._wait_for_scheduler()
         try:
             flow_engine = create_volume.get_flow(context,
                                                  db, self.driver,
                                                  request_spec,
                                                  filter_properties,
-                                                 volume_id,
+                                                 volume,
                                                  snapshot_id,
                                                  image_id)
         except Exception:

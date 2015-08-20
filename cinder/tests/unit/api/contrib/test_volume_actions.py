@@ -13,6 +13,7 @@
 #   under the License.
 
 import datetime
+import iso8601
 import json
 import uuid
 
@@ -772,8 +773,9 @@ class VolumeImageActionsTest(test.TestCase):
                         expected_res = {
                             'os-volume_upload_image': {
                                 'id': id,
-                                'updated_at': datetime.datetime(1900, 1, 1,
-                                                                1, 1, 1),
+                                'updated_at': datetime.datetime(
+                                    1900, 1, 1, 1, 1, 1,
+                                    tzinfo=iso8601.iso8601.Utc()),
                                 'status': 'uploading',
                                 'display_description': 'displaydesc',
                                 'size': 1,
@@ -828,8 +830,9 @@ class VolumeImageActionsTest(test.TestCase):
                         expected_res = {
                             'os-volume_upload_image': {
                                 'id': id,
-                                'updated_at': datetime.datetime(1900, 1, 1,
-                                                                1, 1, 1),
+                                'updated_at': datetime.datetime(
+                                    1900, 1, 1, 1, 1, 1,
+                                    tzinfo=iso8601.iso8601.Utc()),
                                 'status': 'uploading',
                                 'display_description': 'displaydesc',
                                 'size': 1,
@@ -881,8 +884,9 @@ class VolumeImageActionsTest(test.TestCase):
                         expected_res = {
                             'os-volume_upload_image': {
                                 'id': id,
-                                'updated_at': datetime.datetime(1900, 1, 1,
-                                                                1, 1, 1),
+                                'updated_at': datetime.datetime(
+                                    1900, 1, 1, 1, 1, 1,
+                                    tzinfo=iso8601.iso8601.Utc()),
                                 'status': 'uploading',
                                 'display_description': 'displaydesc',
                                 'size': 1,
@@ -927,8 +931,9 @@ class VolumeImageActionsTest(test.TestCase):
                     expected_res = {
                         'os-volume_upload_image': {
                             'id': id,
-                            'updated_at': datetime.datetime(1900, 1, 1,
-                                                            1, 1, 1),
+                            'updated_at': datetime.datetime(
+                                1900, 1, 1, 1, 1, 1,
+                                tzinfo=iso8601.iso8601.Utc()),
                             'status': 'uploading',
                             'display_description': 'displaydesc',
                             'size': 1,

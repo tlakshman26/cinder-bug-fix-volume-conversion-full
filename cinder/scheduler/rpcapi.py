@@ -42,6 +42,7 @@ class SchedulerAPI(object):
         1.6 - Add create_consistencygroup method
         1.7 - Add get_active_pools method
         1.8 - Add sending object over RPC in create_consistencygroup method
+        1.9 - Adds support for sending objects over RPC in create_volume()
     """
 
     RPC_API_VERSION = '1.0'
@@ -51,7 +52,7 @@ class SchedulerAPI(object):
         target = messaging.Target(topic=CONF.scheduler_topic,
                                   version=self.RPC_API_VERSION)
         serializer = objects_base.CinderObjectSerializer()
-        self.client = rpc.get_client(target, version_cap='1.8',
+        self.client = rpc.get_client(target, version_cap='1.9',
                                      serializer=serializer)
 
     def create_consistencygroup(self, ctxt, topic, group,
@@ -70,15 +71,15 @@ class SchedulerAPI(object):
                           request_spec_list=request_spec_p_list,
                           filter_properties_list=filter_properties_list)
 
-    def create_volume(self, ctxt, topic, volume_id, snapshot_id=None,
+    def create_volume(self, ctxt, topic, volume, snapshot_id=None,
                       image_id=None, request_spec=None,
                       filter_properties=None):
 
-        cctxt = self.client.prepare(version='1.2')
+        cctxt = self.client.prepare(version='1.9')
         request_spec_p = jsonutils.to_primitive(request_spec)
         return cctxt.cast(ctxt, 'create_volume',
                           topic=topic,
-                          volume_id=volume_id,
+                          volume=volume,
                           snapshot_id=snapshot_id,
                           image_id=image_id,
                           request_spec=request_spec_p,
