@@ -14,6 +14,7 @@
 #    under the License.
 
 from oslo_log import log as logging
+import six
 
 from cinder.api import common
 
@@ -56,46 +57,46 @@ class ViewBuilder(common.ViewBuilder):
         """Detailed view of a single volume."""
         return {
             'volume': {
-                'id': volume.get('id'),
-                'status': volume.get('status'),
-                'size': volume.get('size'),
-                'availability_zone': volume.get('availability_zone'),
-                'created_at': volume.get('created_at'),
+                'id': volume.id,
+                'status': volume.status,
+                'size': volume.size,
+                'availability_zone': volume.availability_zone,
+                'created_at': volume.created_at,
                 'attachments': self._get_attachments(volume),
-                'name': volume.get('display_name'),
-                'description': volume.get('display_description'),
+                'name': volume.display_name,
+                'description': volume.display_description,
                 'volume_type': self._get_volume_type(volume),
-                'snapshot_id': volume.get('snapshot_id'),
-                'source_volid': volume.get('source_volid'),
+                'snapshot_id': volume.snapshot_id,
+                'source_volid': volume.source_volid,
                 'metadata': self._get_volume_metadata(volume),
-                'links': self._get_links(request, volume['id']),
-                'user_id': volume.get('user_id'),
-                'bootable': str(volume.get('bootable')).lower(),
+                'links': self._get_links(request, volume.id),
+                'user_id': volume.user_id,
+                'bootable': six.text_type(volume.bootable).lower(),
                 'encrypted': self._is_volume_encrypted(volume),
-                'replication_status': volume.get('replication_status'),
-                'consistencygroup_id': volume.get('consistencygroup_id'),
-                'multiattach': volume.get('multiattach')
+                'replication_status': volume.replication_status,
+                'consistencygroup_id': volume.consistencygroup_id,
+                'multiattach': volume.multiattach
             }
         }
 
     def _is_volume_encrypted(self, volume):
         """Determine if volume is encrypted."""
-        return volume.get('encryption_key_id') is not None
+        return volume.encryption_key_id is not None
 
     def _get_attachments(self, volume):
         """Retrieve the attachments of the volume object."""
         attachments = []
 
-        if volume['attach_status'] == 'attached':
-            attaches = volume.get('volume_attachment', [])
+        if volume.attach_status == 'attached':
+            attaches = volume.volume_attachment
             for attachment in attaches:
-                if attachment.get('attach_status') == 'attached':
-                    a = {'id': attachment.get('volume_id'),
-                         'attachment_id': attachment.get('id'),
-                         'volume_id': attachment.get('volume_id'),
-                         'server_id': attachment.get('instance_uuid'),
-                         'host_name': attachment.get('attached_host'),
-                         'device': attachment.get('mountpoint'),
+                if attachment.attach_status == 'attached':
+                    a = {'id': attachment.volume_id,
+                         'attachment_id': attachment.id,
+                         'volume_id': attachment.volume_id,
+                         'server_id': attachment.instance_uuid,
+                         'host_name': attachment.attached_host,
+                         'device': attachment.mountpoint,
                          }
                     attachments.append(a)
 
@@ -103,21 +104,14 @@ class ViewBuilder(common.ViewBuilder):
 
     def _get_volume_metadata(self, volume):
         """Retrieve the metadata of the volume object."""
-        if volume.get('volume_metadata'):
-            metadata = volume.get('volume_metadata')
-            return {item['key']: item['value'] for item in metadata}
-        # avoid circular ref when vol is a Volume instance
-        elif volume.get('metadata') and isinstance(volume.get('metadata'),
-                                                   dict):
-            return volume['metadata']
-        return {}
+        return volume.metadata
 
     def _get_volume_type(self, volume):
         """Retrieve the type the volume object."""
-        if volume['volume_type_id'] and volume.get('volume_type'):
-            return volume['volume_type']['name']
+        if volume.volume_type_id and volume.volume_type:
+            return volume.volume_type.name
         else:
-            return volume['volume_type_id']
+            return volume.volume_type_id
 
     def _list_view(self, func, request, volumes, volume_count,
                    coll_name=_collection_name):

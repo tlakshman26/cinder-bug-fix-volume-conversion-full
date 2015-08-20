@@ -80,6 +80,16 @@ class TestSnapshot(test_objects.BaseObjectsTestCase):
         snapshot.create()
         self.assertEqual('1111-aaaa', snapshot.provider_id)
 
+    @mock.patch('cinder.db.snapshot_metadata_get', return_value={})
+    @mock.patch('cinder.db.snapshot_get')
+    def test_refresh(self, snapshot_get, snapshot_metadata_get):
+        db_snapshot = fake_snapshot.fake_db_snapshot()
+        snapshot_get.return_value = db_snapshot
+        snapshot = objects.Snapshot.get_by_id(self.context, '1')
+        snapshot.refresh()
+        snapshot_get.assert_has_calls([mock.call(self.context, '1'),
+                                       mock.call(self.context, '1')])
+
     @mock.patch('cinder.db.snapshot_update')
     def test_save(self, snapshot_update):
         snapshot = objects.Snapshot._from_db_object(

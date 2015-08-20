@@ -40,12 +40,11 @@ class PrepareForQuotaReservationTask(flow_utils.CinderTask):
         self.driver = driver
 
     def execute(self, context, volume_ref, manage_existing_ref):
-        volume_id = volume_ref['id']
         if not self.driver.initialized:
             driver_name = self.driver.__class__.__name__
             LOG.error(_LE("Unable to manage existing volume. "
                           "Volume driver %s not initialized.") % driver_name)
-            flow_common.error_out_volume(context, self.db, volume_id,
+            flow_common.error_out_volume(context, self.db, volume_ref.id,
                                          reason=_("Volume driver %s "
                                                   "not initialized.") %
                                          driver_name)
@@ -55,11 +54,11 @@ class PrepareForQuotaReservationTask(flow_utils.CinderTask):
                                                     manage_existing_ref)
 
         return {'size': size,
-                'volume_type_id': volume_ref['volume_type_id'],
+                'volume_type_id': volume_ref.volume_type_id,
                 'volume_properties': volume_ref,
-                'volume_spec': {'status': volume_ref['status'],
-                                'volume_name': volume_ref['name'],
-                                'volume_id': volume_ref['id']}}
+                'volume_spec': {'status': volume_ref.status,
+                                'volume_name': volume_ref.name,
+                                'volume_id': volume_ref.id}}
 
 
 class ManageExistingTask(flow_utils.CinderTask):
@@ -79,12 +78,12 @@ class ManageExistingTask(flow_utils.CinderTask):
             model_update = {}
         model_update.update({'size': size})
         try:
-            volume_ref = self.db.volume_update(context, volume_ref['id'],
-                                               model_update)
+            volume_ref.update(model_update)
+            volume_ref.save()
         except exception.CinderException:
             LOG.exception(_LE("Failed updating model of volume %(volume_id)s"
                               " with creation provided model %(model)s") %
-                          {'volume_id': volume_ref['id'],
+                          {'volume_id': volume_ref.id,
                            'model': model_update})
             raise
 

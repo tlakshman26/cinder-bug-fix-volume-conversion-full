@@ -91,12 +91,12 @@ class SchedulerRpcAPITestCase(test.TestCase):
         self._test_scheduler_api('create_volume',
                                  rpc_method='cast',
                                  topic='topic',
-                                 volume_id='volume_id',
+                                 volume='volume',
                                  snapshot_id='snapshot_id',
                                  image_id='image_id',
                                  request_spec='fake_request_spec',
                                  filter_properties='filter_properties',
-                                 version='1.2')
+                                 version='1.9')
 
     def test_migrate_volume_to_host(self):
         self._test_scheduler_api('migrate_volume_to_host',

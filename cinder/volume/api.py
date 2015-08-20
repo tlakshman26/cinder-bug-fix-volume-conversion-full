@@ -105,7 +105,8 @@ def check_policy(context, action, target_obj=None):
 
     if isinstance(target_obj, objects_base.CinderObject):
         # Turn object into dict so target.update can work
-        target.update(target_obj.obj_to_primitive() or {})
+        target.update(
+            target_obj.obj_to_primitive()['versioned_object.data'] or {})
     else:
         target.update(target_obj or {})
 
@@ -265,7 +266,7 @@ class API(base.Base):
             'snapshot': snapshot,
             'image_id': image_id,
             'raw_volume_type': volume_type,
-            'metadata': metadata,
+            'metadata': metadata or {},
             'raw_availability_zone': availability_zone,
             'source_volume': source_volume,
             'scheduler_hints': scheduler_hints,
@@ -303,22 +304,21 @@ class API(base.Base):
 
     @wrap_check_policy
     def delete(self, context, volume, force=False, unmanage_only=False):
-        if context.is_admin and context.project_id != volume['project_id']:
-            project_id = volume['project_id']
+        if context.is_admin and context.project_id != volume.project_id:
+            project_id = volume.project_id
         else:
             project_id = context.project_id
 
-        volume_id = volume['id']
-        if not volume['host']:
+        if not volume.host:
             volume_utils.notify_about_volume_usage(context,
                                                    volume, "delete.start")
             # NOTE(vish): scheduling failed, so delete it
             # Note(zhiteng): update volume quota reservation
             try:
-                reserve_opts = {'volumes': -1, 'gigabytes': -volume['size']}
+                reserve_opts = {'volumes': -1, 'gigabytes': -volume.size}
                 QUOTAS.add_volume_type_opts(context,
                                             reserve_opts,
-                                            volume['volume_type_id'])
+                                            volume.volume_type_id)
                 reservations = QUOTAS.reserve(context,
                                               project_id=project_id,
                                               **reserve_opts)
@@ -326,7 +326,7 @@ class API(base.Base):
                 reservations = None
                 LOG.exception(_LE("Failed to update quota while "
                                   "deleting volume."))
-            self.db.volume_destroy(context.elevated(), volume_id)
+            volume.destroy()
 
             if reservations:
                 QUOTAS.commit(context, reservations, project_id=project_id)
@@ -335,45 +335,45 @@ class API(base.Base):
                                                    volume, "delete.end")
             LOG.info(_LI("Delete volume request issued successfully."),
                      resource={'type': 'volume',
-                               'id': volume_id})
+                               'id': volume.id})
             return
-        if volume['attach_status'] == "attached":
+        if volume.attach_status == "attached":
             # Volume is still attached, need to detach first
             LOG.info(_LI('Unable to delete volume: %s, '
-                         'volume is attached.'), volume['id'])
-            raise exception.VolumeAttached(volume_id=volume_id)
+                         'volume is attached.'), volume.id)
+            raise exception.VolumeAttached(volume_id=volume.id)
 
-        if not force and volume['status'] not in ["available", "error",
-                                                  "error_restoring",
-                                                  "error_extending"]:
+        if not force and volume.status not in ["available", "error",
+                                               "error_restoring",
+                                               "error_extending"]:
             msg = _("Volume status must be available or error, "
-                    "but current status is: %s.") % volume['status']
+                    "but current status is: %s.") % volume.status
             LOG.info(_LI('Unable to delete volume: %(vol_id)s, '
                          'volume must be available or '
                          'error, but is %(vol_status)s.'),
-                     {'vol_id': volume['id'],
-                      'vol_status': volume['status']})
+                     {'vol_id': volume.id,
+                      'vol_status': volume.status})
             raise exception.InvalidVolume(reason=msg)
 
         if volume['migration_status'] not in (None, 'deleting'):
             # Volume is migrating, wait until done
             LOG.info(_LI('Unable to delete volume: %s, '
-                         'volume is currently migrating.'), volume['id'])
+                         'volume is currently migrating.'), volume.id)
             msg = _("Volume cannot be deleted while migrating")
             raise exception.InvalidVolume(reason=msg)
 
-        if volume['consistencygroup_id'] is not None:
+        if volume.consistencygroup_id is not None:
             msg = _("Volume cannot be deleted while in a consistency group.")
             LOG.info(_LI('Unable to delete volume: %s, '
                          'volume is currently part of a '
-                         'consistency group.'), volume['id'])
+                         'consistency group.'), volume.id)
             raise exception.InvalidVolume(reason=msg)
 
         snapshots = objects.SnapshotList.get_all_for_volume(context,
-                                                            volume_id)
+                                                            volume.id)
         if len(snapshots):
             LOG.info(_LI('Unable to delete volume: %s, '
-                         'volume currently has snapshots.'), volume['id'])
+                         'volume currently has snapshots.'), volume.id)
             msg = _("Volume still has %d dependent "
                     "snapshots.") % len(snapshots)
             raise exception.InvalidVolume(reason=msg)
@@ -385,31 +385,29 @@ class API(base.Base):
         if encryption_key_id is not None:
             self.key_manager.delete_key(context, encryption_key_id)
 
-        now = timeutils.utcnow()
-        vref = self.db.volume_update(context,
-                                     volume_id,
-                                     {'status': 'deleting',
-                                      'terminated_at': now})
+        volume.status = 'deleting'
+        volume.terminated_at = timeutils.utcnow()
+        volume.save()
 
         self.volume_rpcapi.delete_volume(context, volume, unmanage_only)
         LOG.info(_LI("Delete volume request issued successfully."),
-                 resource=vref)
+                 resource=volume)
 
     @wrap_check_policy
     def update(self, context, volume, fields):
-        vref = self.db.volume_update(context, volume['id'], fields)
-        LOG.info(_LI("Volume updated successfully."), resource=vref)
+        volume.update(fields)
+        volume.save()
+        LOG.info(_LI("Volume updated successfully."), resource=volume)
 
     def get(self, context, volume_id, viewable_admin_meta=False):
-        rv = self.db.volume_get(context, volume_id)
-
-        volume = dict(rv)
+        volume = objects.Volume.get_by_id(context, volume_id)
 
         if viewable_admin_meta:
             ctxt = context.elevated()
             admin_metadata = self.db.volume_admin_metadata_get(ctxt,
                                                                volume_id)
-            volume['volume_admin_metadata'] = admin_metadata
+            volume.admin_metadata = admin_metadata
+            volume.obj_reset_changes()
 
         try:
             check_policy(context, 'get', volume)
@@ -417,7 +415,7 @@ class API(base.Base):
             # raise VolumeNotFound instead to make sure Cinder behaves
             # as it used to
             raise exception.VolumeNotFound(volume_id=volume_id)
-        LOG.info(_LI("Volume info retrieved successfully."), resource=rv)
+        LOG.info(_LI("Volume info retrieved successfully."), resource=volume)
         return volume
 
     def _get_all_tenants_value(self, filters):
@@ -473,21 +471,18 @@ class API(base.Base):
         if context.is_admin and allTenants:
             # Need to remove all_tenants to pass the filtering below.
             del filters['all_tenants']
-            volumes = self.db.volume_get_all(context, marker, limit,
-                                             sort_keys=sort_keys,
-                                             sort_dirs=sort_dirs,
-                                             filters=filters,
-                                             offset=offset)
+            volumes = objects.VolumeList.get_all(context, marker, limit,
+                                                 sort_keys=sort_keys,
+                                                 sort_dirs=sort_dirs,
+                                                 filters=filters,
+                                                 offset=offset)
         else:
             if viewable_admin_meta:
                 context = context.elevated()
-            volumes = self.db.volume_get_all_by_project(context,
-                                                        context.project_id,
-                                                        marker, limit,
-                                                        sort_keys=sort_keys,
-                                                        sort_dirs=sort_dirs,
-                                                        filters=filters,
-                                                        offset=offset)
+            volumes = objects.VolumeList.get_all_by_project(
+                context, context.project_id, marker, limit,
+                sort_keys=sort_keys, sort_dirs=sort_dirs, filters=filters,
+                offset=offset)
 
         LOG.info(_LI("Get all volumes completed successfully."))
         return volumes
@@ -499,14 +494,14 @@ class API(base.Base):
         # so build the resource tag manually for now.
         LOG.info(_LI("Snapshot retrieved successfully."),
                  resource={'type': 'snapshot',
-                           'id': snapshot['id']})
+                           'id': snapshot.id})
         return snapshot
 
     def get_volume(self, context, volume_id):
         check_policy(context, 'get_volume')
-        vref = self.db.volume_get(context, volume_id)
-        LOG.info(_LI("Volume retrieved successfully."), resource=vref)
-        return dict(vref)
+        volume = objects.Volume.get_by_id(context, volume_id)
+        LOG.info(_LI("Volume retrieved successfully."), resource=volume)
+        return volume
 
     def get_all_snapshots(self, context, search_opts=None):
         check_policy(context, 'get_all_snapshots')
@@ -529,7 +524,6 @@ class API(base.Base):
     def reserve_volume(self, context, volume):
         # NOTE(jdg): check for Race condition bug 1096983
         # explicitly get updated ref and check
-        volume = self.db.volume_get(context, volume['id'])
         if volume['status'] == 'available':
             self.update(context, volume, {"status": "attaching"})
         elif volume['status'] == 'in-use':
@@ -548,7 +542,6 @@ class API(base.Base):
 
     @wrap_check_policy
     def unreserve_volume(self, context, volume):
-        volume = self.db.volume_get(context, volume['id'])
         if volume['status'] == 'attaching':
             attaches = self.db.volume_attachment_get_used_by_volume_id(
                 context, volume['id'])
@@ -564,21 +557,22 @@ class API(base.Base):
         # NOTE(vbala): The volume status might be 'detaching' already due to
         # a previous begin_detaching call. Get updated volume status so that
         # we fail such cases.
-        volume = self.db.volume_get(context, volume['id'])
+        volume.refresh()
+
         # If we are in the middle of a volume migration, we don't want the user
         # to see that the volume is 'detaching'. Having 'migration_status' set
         # will have the same effect internally.
-        if volume['migration_status']:
+        if volume.migration_status:
             return
 
-        if (volume['status'] != 'in-use' or
-                volume['attach_status'] != 'attached'):
+        if (volume.status != 'in-use' or
+                volume.attach_status != 'attached'):
             msg = (_("Unable to detach volume. Volume status must be 'in-use' "
                      "and attach_status must be 'attached' to detach. "
                      "Currently: status: '%(status)s', "
                      "attach_status: '%(attach_status)s.'") %
-                   {'status': volume['status'],
-                    'attach_status': volume['attach_status']})
+                   {'status': volume.status,
+                    'attach_status': volume.attach_status})
             LOG.error(msg)
             raise exception.InvalidVolume(reason=msg)
         self.update(context, volume, {"status": "detaching"})
@@ -922,9 +916,9 @@ class API(base.Base):
         snapshot_obj.status = 'deleting'
         snapshot_obj.save()
 
-        volume = self.db.volume_get(context, snapshot_obj.volume_id)
+        volume = objects.Volume.get_by_id(context, snapshot_obj.volume_id)
         self.volume_rpcapi.delete_snapshot(context, snapshot_obj,
-                                           volume['host'])
+                                           volume.host)
         LOG.info(_LI("Snapshot delete request issued successfully."),
                  resource=snapshot)
 
